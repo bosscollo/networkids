@@ -22,7 +22,7 @@ if uploaded_file is not None:
     data[data < 0] = 0
 
     # Predict
-    predictions = model.predict(data)
+    predictions = model.predict(data.values)
     predicted_labels = encoder.inverse_transform(predictions)
 
     # Add predictions to dataframe
