@@ -1,5 +1,4 @@
-# Network Intrusion Detection System (Networkids) Using Machine Learning -
-'Ps nothing to do with kids it's IDS'
+# Network Intrusion Detection System (Networkids) Using Machine Learning 
 
 This project is part of the AI Mini-Project. It demonstrates how machine learning can be applied to detect malicious network traffic in real-time. The goal is to build a system that can classify network connections as either normal or as different types of attacks, such as DDoS, Brute Force, or Port Scanning.
 
