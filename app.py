@@ -1,58 +1,58 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import joblib
 
-# -----------------------
-# Load model and encoder
-# -----------------------
+# Load model & label encoder
 @st.cache_resource
 def load_model():
-    model = joblib.load("random_forest_nids_model.pkl")
+    model = joblib.load("nids_model.pkl")
     encoder = joblib.load("label_encoder.pkl")
     return model, encoder
 
 model, label_encoder = load_model()
 
-# -----------------------
-# Streamlit page setup
-# -----------------------
-st.set_page_config(page_title="Network Intrusion Detection System", layout="wide")
+# Page setup
+st.set_page_config(page_title="Network IDS", layout="wide")
+st.title("📡 Network Intrusion Detection System (ML-Powered)")
 
-st.title("📡 Network Intrusion Detection System (NIDS)")
-st.write("Upload a cleaned CSV file to classify network traffic as Normal or Attack.")
-
-# -----------------------
-# File upload
-# -----------------------
-uploaded_file = st.file_uploader("📁 Upload a CSV file", type=["csv"])
+# Upload
+uploaded_file = st.file_uploader("📁 Upload a preprocessed CSV file", type=["csv"])
 
 if uploaded_file:
     try:
-        # Read CSV
+        # Load and preview
         df = pd.read_csv(uploaded_file)
+        st.subheader("📊 Uploaded Preview")
+        st.dataframe(df.head())
 
-        # Only apply to numeric columns
-        numeric_cols = df.select_dtypes(include=["number"]).columns
-        df[numeric_cols] = df[numeric_cols].clip(lower=0)
+        # Drop any non-feature columns just in case
+        to_drop = ['Attack Type', 'Attack type', 'Label', 'Protocol']
+        df = df.drop(columns=[col for col in to_drop if col in df.columns], errors='ignore')
 
-        # Predict
-        predictions = model.predict(df)
-        decoded_preds = label_encoder.inverse_transform(predictions)
+        # Only use numeric features (as model was trained on 53 normalized columns)
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        df[numeric_cols] = df[numeric_cols].apply(
+            lambda x: (x - x.min()) / (x.max() - x.min())
+        )
 
-        # Display predictions
-        st.subheader("🔍 Prediction Results")
-        st.write(f"✅ Total records: {len(df)}")
-        st.write(f"🚨 Attack types detected: {set(decoded_preds)}")
-        st.dataframe(pd.DataFrame({"Prediction": decoded_preds}))
+        # Ensure column match
+        expected_cols = model.feature_names_in_
+        df = df[[col for col in expected_cols if col in df.columns]]
+
+        # Prediction
+        preds = model.predict(df)
+        labels = label_encoder.inverse_transform(preds)
+
+        st.subheader("✅ Prediction Results")
+        st.dataframe(pd.DataFrame({"Prediction": labels}))
 
         # Download results
-        output_df = df.copy()
-        output_df["Prediction"] = decoded_preds
-        csv = output_df.to_csv(index=False).encode("utf-8")
-        st.download_button("⬇️ Download Prediction CSV", csv, "nids_predictions.csv", "text/csv")
+        df_out = df.copy()
+        df_out["Prediction"] = labels
+        st.download_button("⬇️ Download CSV", df_out.to_csv(index=False), "nids_predictions.csv", "text/csv")
 
     except Exception as e:
         st.error(f"Error processing the file: {e}")
-
 else:
-    st.info("Upload a CSV file to begin.")
+    st.info("Upload a CSV file above to begin prediction.")
