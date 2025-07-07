@@ -1,58 +1,60 @@
+# app.py
+
 import streamlit as st
 import pandas as pd
-import numpy as np
 import joblib
 
-# Load model & label encoder
-@st.cache_resource
-def load_model():
-    model = joblib.load("nids_model.pkl")
-    encoder = joblib.load("label_encoder.pkl")
-    return model, encoder
+# --- Load Model and Encoder ---
+model = joblib.load("nids_model.pkl")
+label_encoder = joblib.load("label_encoder.pkl")
 
-model, label_encoder = load_model()
+# --- Load Expected Features (from training) ---
+expected_features = list(model.feature_names_in_)
 
-# Page setup
-st.set_page_config(page_title="Network IDS", layout="wide")
-st.title("📡 Network Intrusion Detection System (ML-Powered)")
+st.set_page_config(page_title="NIDS Predictor", layout="wide")
+st.title("Network Intrusion Detection System (NIDS)")
+st.markdown("Upload your network CSV sample (even with partial features) to predict potential threats.")
 
-# Upload
-uploaded_file = st.file_uploader("📁 Upload a preprocessed CSV file", type=["csv"])
+# --- Upload Section ---
+uploaded_file = st.file_uploader("📄 Upload CSV File", type=["csv"])
 
 if uploaded_file:
     try:
-        # Load and preview
+        # Load CSV
         df = pd.read_csv(uploaded_file)
-        st.subheader("📊 Uploaded Preview")
-        st.dataframe(df.head())
 
-        # Drop any non-feature columns just in case
-        to_drop = ['Attack Type', 'Attack type', 'Label', 'Protocol']
-        df = df.drop(columns=[col for col in to_drop if col in df.columns], errors='ignore')
+        # Identify missing and extra columns
+        missing = [col for col in expected_features if col not in df.columns]
+        extra = [col for col in df.columns if col not in expected_features]
 
-        # Only use numeric features (as model was trained on 53 normalized columns)
-        numeric_cols = df.select_dtypes(include=[np.number]).columns
-        df[numeric_cols] = df[numeric_cols].apply(
-            lambda x: (x - x.min()) / (x.max() - x.min())
-        )
+        # Drop unknown columns
+        df = df.drop(columns=extra, errors='ignore')
 
-        # Ensure column match
-        expected_cols = model.feature_names_in_
-        df = df[[col for col in expected_cols if col in df.columns]]
+        # Fill missing columns with 0
+        for col in missing:
+            df[col] = 0
+
+        # Reorder columns to match model input
+        df = df[expected_features]
 
         # Prediction
-        preds = model.predict(df)
-        labels = label_encoder.inverse_transform(preds)
+        predictions = model.predict(df)
+        decoded_preds = label_encoder.inverse_transform(predictions)
 
-        st.subheader("✅ Prediction Results")
-        st.dataframe(pd.DataFrame({"Prediction": labels}))
+        df['Prediction'] = decoded_preds
+        st.success("✅ Prediction completed.")
+        st.dataframe(df[['Prediction']])
 
         # Download results
-        df_out = df.copy()
-        df_out["Prediction"] = labels
-        st.download_button("⬇️ Download CSV", df_out.to_csv(index=False), "nids_predictions.csv", "text/csv")
+        st.download_button(
+            label="📥 Download Results as CSV",
+            data=df.to_csv(index=False),
+            file_name="nids_predictions.csv",
+            mime="text/csv"
+        )
 
     except Exception as e:
-        st.error(f"Error processing the file: {e}")
+        st.error(f"⚠️ Error processing file: {e}")
+
 else:
-    st.info("Upload a CSV file above to begin prediction.")
+    st.info("Upload a CSV file to begin.")
